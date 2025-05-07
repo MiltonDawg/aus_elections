@@ -1,0 +1,135 @@
+---
+title: "Peak Party Votes"
+author: "Joshua Pooley"
+format: html
+---
+
+
+```{r setup}
+library(knitr)
+opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+  )
+
+library(readxl)
+library(writexl)
+library(janitor)
+library(gt)
+library(tidyverse)
+```
+
+```{r data}
+df <- read_csv(
+  '~/Coding/Elections/HoR_2022_Pref_by_Div.csv',
+  skip = 1
+  )
+```
+
+```{r}
+# create tidy party names, including an "Independent" suffix for unaligned candidates
+HoR22_0 <- df %>% 
+  mutate(PartyNm = replace_na(PartyNm, 'Independent'),
+         PartyAb = case_match(PartyAb,
+                              'GVIC' ~ 'GRN',
+                              .default = PartyAb),
+         PartyNm = case_when(PartyAb == 'ALP' ~ 'Labor',
+                             PartyAb == 'DPDA' ~ 'Democratic Alliance',
+                             PartyAb == 'GRN' ~ 'Greens',
+                             PartyAb == 'NP' ~ 'Nationals',
+                             .default = PartyNm)) %>% 
+  mutate(PartyNm = case_when(PartyNm == 'Independent' ~ paste('Independent', CandidateID, sep = '_'),
+                             .default = PartyNm))
+
+ind_list <- HoR22_0 %>% 
+  filter(is.na(PartyAb) |
+         PartyAb == 'IND') %>% 
+  distinct(CandidateID) %>% 
+  mutate(number = row_number())
+
+HoR22 <- HoR22_0 %>% 
+  left_join(ind_list,
+            join_by(CandidateID)) %>% 
+  mutate(PartyAb = case_when(!is.na(number) ~ paste('IND', number, sep = ''),
+                             .default = PartyAb)) %>% 
+  select(-number)
+
+division_key <- HoR22 %>% 
+  distinct(DivisionID, DivisionNm)
+
+candidate_key <- HoR22 %>% 
+  distinct(CandidateID, Surname, GivenNm, PartyAb, PartyNm, Elected, HistoricElected)
+
+party_key <- HoR22 %>% 
+  distinct(PartyAb, PartyNm) %>% 
+  arrange(PartyAb)
+
+HoR22_votes <- HoR22 %>% 
+  filter(CalculationType %in% c('Preference Count', 'Transfer Count')) %>% 
+  select(StateAb, DivisionID, CountNumber, BallotPosition, CandidateID, CalculationType, CalculationValue) %>% 
+  mutate(transferor = CandidateID[which.min(CalculationValue)],
+         .by = c(DivisionID, CountNumber)) %>% 
+  mutate(transferor = case_when(CountNumber == 0 ~ NA,
+                                .default = transferor))
+```
+
+```{r}
+total_division_votes <- HoR22_votes %>% 
+  filter(
+    CalculationType == 'Preference Count',
+    is.na(transferor)) %>% 
+  summarise(
+    total_votes = sum(CalculationValue, na.rm = TRUE),
+    .by = DivisionID
+  )
+
+HoR22_max_votes <- HoR22_votes %>% 
+  mutate(
+    round_end_vote_tally = sum(CalculationValue, na.rm = TRUE),
+    .by = c(DivisionID, CandidateID, CountNumber)) %>% 
+  filter(
+    CalculationType == 'Preference Count'
+  ) %>% 
+  select(
+    -CalculationType
+  ) %>% 
+  summarise(
+    max_vote = max(round_end_vote_tally, na.rm = TRUE),
+    .by = c(StateAb, DivisionID, BallotPosition, CandidateID)
+  ) %>% 
+  left_join(
+    candidate_key %>% 
+      select(
+        CandidateID,
+        PartyAb,
+        PartyNm,
+        Elected,
+        HistoricElected
+      ),
+    join_by(CandidateID)
+  ) %>% 
+  left_join(
+    total_division_votes,
+    join_by(DivisionID)
+  ) %>% 
+  mutate(
+    max_vote_pct = max_vote / total_votes
+  ) %>% 
+  left_join(
+    division_key,
+    join_by(DivisionID)
+  ) %>% 
+  select(
+    StateAb, DivisionNm, PartyAb, PartyNm, max_vote, max_vote_pct, total_votes, Elected, HistoricElected
+  ) 
+```
+
+```{r}
+HoR22_max_votes_aggregates <- HoR22_max_votes %>% 
+  summarise(
+    
+  )
+```
+
+
