@@ -22,7 +22,7 @@ library(tidyverse)
 
 ```{r data}
 df <- read_csv(
-  '~/Coding/Elections/HoR_2022_Pref_by_Div.csv',
+  '/cloud/project/HoR_2022_Pref_by_Div.csv',
   skip = 1
   )
 ```
@@ -127,8 +127,32 @@ HoR22_max_votes <- HoR22_votes %>%
 
 ```{r}
 HoR22_max_votes_aggregates <- HoR22_max_votes %>% 
+  mutate(
+    PartyAb = case_when(
+      PartyAb %in% c('LP','NP','LNP','CLP') ~ 'LNPAUS',
+      .default = PartyAb
+    ),
+    PartyNm = case_when(
+      PartyAb == 'LNPAUS' ~ 'Coalition',
+      .default = PartyNm
+    )
+  ) %>% 
   summarise(
-    
+    max_vote = sum(max_vote, na.rm = T),
+    .by = c(PartyAb, PartyNm, DivisionNm, total_votes)
+  ) %>% 
+  mutate(
+    max_vote_pct = max_vote / total_votes,
+    .by = c(PartyAb, PartyNm, DivisionNm)
+  ) %>% 
+  summarise(
+    seats_contested = n(),
+    avg_max_vote_unweighted = mean(max_vote_pct, na.rm = T),
+    avg_max_vote_weighted = sum(max_vote, na.rm = T) / sum(total_votes, na.rm = T),
+    .by = c(PartyAb, PartyNm)
+  ) %>% 
+  arrange(
+    desc(seats_contested)
   )
 ```
 
