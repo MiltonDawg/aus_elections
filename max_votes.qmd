@@ -7,12 +7,11 @@ format: html
 
 ```{r setup}
 library(knitr)
-opts_chunk$set(
+knitr::opts_chunk$set(
+	echo = FALSE,
 	message = FALSE,
-	warning = FALSE,
-	include = FALSE
-  )
-
+	warning = FALSE
+)
 library(readxl)
 library(writexl)
 library(janitor)
